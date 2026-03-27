@@ -1,0 +1,9 @@
+vkbottle
+envparse
+sqlalchemy
+asyncpg
+apscheduler
+loguru
+aiofiles
+aiohttp
+aioshutil
