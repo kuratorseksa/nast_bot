@@ -2,6 +2,7 @@ vkbottle
 envparse
 sqlalchemy
 asyncpg
+greenlet
 apscheduler
 loguru
 aiofiles

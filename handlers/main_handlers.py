@@ -246,9 +246,9 @@ async def get_homework_file(message: Message):
             async with aiohttp.ClientSession() as http_session:
                 async with http_session.get(doc_url) as response:
                     if response.status == 200:
-                        path = f"homework\\{deadline_name}"
+                        path = f"homework/{deadline_name}"
                         await asyncio.to_thread(os.makedirs, path, exist_ok=True)
-                        async with aiofiles.open(path + f'\\{ac_name}.{ext}', "wb") as file:
+                        async with aiofiles.open(path + f'/{ac_name}.{ext}', "wb") as file:
                             await file.write(await response.read())
                         await message.answer("Домашка успешно загружена!", keyboard=main_kb(message.from_id))
                         async with async_session as session:
@@ -265,9 +265,9 @@ async def get_homework_file(message: Message):
                 ac = await session.execute(select(AlmostCurator).where(AlmostCurator.vk_id == message.from_id))
                 ac_obj = ac.scalar()
                 ac_name = ac_obj.name
-            path = f"homework\\{deadline_name}"
+            path = f"homework/{deadline_name}"
             await asyncio.to_thread(os.makedirs, path, exist_ok=True)
-            async with aiofiles.open(path + f'\\{ac_name}.txt', "wt") as file:
+            async with aiofiles.open(path + f'/{ac_name}.txt', "wt") as file:
                 await file.write(message.text)
             await message.answer("Домашка успешно загружена!", keyboard=main_kb(message.from_id))
             async with async_session as session:

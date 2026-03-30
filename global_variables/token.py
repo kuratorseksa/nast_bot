@@ -1,12 +1,14 @@
+import os
 from envparse import env
 from vkbottle import API
 
-env.read_envfile('.env')
+if os.path.exists('.env'):
+    env.read_envfile('.env')
 
 TOKEN = env.str('TOKEN')
 POSTGRES_HOST = env.str('POSTGRES_HOST', default='localhost')
 POSTGRES_PORT = env.str('POSTGRES_PORT', default=5432)
-POSTGRES_PASSWORD = env.str('POSTGRES_PASSWORD')
+POSTGRES_PASSWORD = env.str('POSTGRES_PASSWORD', default='')
 POSTGRES_USER = env.str('POSTGRES_USER')
 POSTGRES_DB = env.str('POSTGRES_DB')
 GROUP_ID = env.int('GROUP_ID')

@@ -425,8 +425,9 @@ async def get_hw(message: Message):
 
 @admin_labeler.private_message(state=BotStates.HW_CHOOSE_ADM)
 async def choose_hw_adm(message: Message):
-    folder_path = 'homework\\' + message.text
-    output_zip_path = await aioshutil.make_archive(f'homework_zips\\{message.text}', 'zip', folder_path)
+    folder_path = 'homework/' + message.text
+    os.makedirs('homework_zips', exist_ok=True)
+    output_zip_path = await aioshutil.make_archive(f'homework_zips/{message.text}', 'zip', folder_path)
 
     if not os.path.exists(output_zip_path):
         await message.answer("Не удалось создать архив")

@@ -8,7 +8,7 @@ from global_variables.variables import state_dispenser, labeler, deadline_schedu
 from global_variables.token import api
 from loguru import logger
 from vkbottle import Bot
-from orm.database import init_models, select, insert
+from orm.database import init_models, create_tables, select, insert
 import asyncio
 import random
 import sys
@@ -35,13 +35,12 @@ def start_bot(loop):
               labeler=labeler,
               state_dispenser=state_dispenser)
 
-    deadline_scheduler.start()
+    async def startup():
+        await create_tables()
+        await load_deadline()
+        deadline_scheduler.start()
 
-    try:
-        # result_2 = loop.run_until_complete(init_models())
-        result = loop.run_until_complete(load_deadline())
-    finally:
-        pass
+    loop.run_until_complete(startup())
 
     print("Bot is started!")
 

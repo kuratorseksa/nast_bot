@@ -9,6 +9,13 @@ Async_Session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession
 async_session = Async_Session()
 
 
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    await engine.dispose()
+
+
 async def init_models():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
