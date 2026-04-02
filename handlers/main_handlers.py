@@ -203,11 +203,31 @@ async def get_other_profile_surname(message: Message):
 
 @main_labeler.private_message(text=['Календарь'])
 async def get_calendar(message: Message):
-    doc = await doc_uploader.upload(
-        file_source="photo.png",
-        peer_id=message.peer_id,
-    )
-    await message.answer(attachment=doc)
+    import json
+    import asyncio
+
+    MAX_RETRIES = 3
+    doc = None
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            doc = await doc_uploader.upload(
+                file_source="photo.png",
+                peer_id=message.peer_id,
+            )
+            break
+        except json.JSONDecodeError:
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(2)
+            else:
+                await message.answer("⚠️ Произошла ошибка. Попробуй еще раз.")
+                return
+        except Exception as e:
+            await message.answer(f"⚠️ Произошла ошибка: {e}")
+            return
+
+    if doc:
+        await message.answer(attachment=doc)
 
 
 @main_labeler.private_message(text=['Сдать домашку'])
