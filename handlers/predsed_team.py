@@ -1,5 +1,6 @@
 import datetime
 import os
+import io
 
 import sqlalchemy
 import vkbottle
@@ -426,28 +427,46 @@ async def get_hw(message: Message):
 @admin_labeler.private_message(state=BotStates.HW_CHOOSE_ADM)
 async def choose_hw_adm(message: Message):
     folder_path = 'homework/' + message.text
-    os.makedirs('homework_zips', exist_ok=True)
+    await asyncio.to_thread(os.makedirs, 'homework_zips', exist_ok=True)
     output_zip_path = await aioshutil.make_archive(f'homework_zips/{message.text}', 'zip', folder_path)
 
-    if not os.path.exists(output_zip_path):
-        await message.answer("Не удалось создать архив")
+    if not await asyncio.to_thread(os.path.exists, output_zip_path):
+        await message.answer("Не удалось создать архив", keyboard=admin_kb())
+        await state_dispenser.delete(message.from_id)
         return
 
-    for i in range(1, 4):
+    # Читаем файл как байты заранее
+    async with aiofiles.open(output_zip_path, "rb") as f:
+        zip_bytes = await f.read()
+
+    MAX_RETRIES = 3
+    for i in range(1, MAX_RETRIES + 1):
         await message.answer(f'Пытаюсь отправить файл... Попытка №{i}')
         try:
+            import io
             doc = await doc_uploader.upload(
-                file_source=output_zip_path,
+                file_source=io.BytesIO(zip_bytes),
                 peer_id=message.peer_id,
+                doc_title=f'{message.text}.zip',
             )
             if doc:
-                await message.answer(f'Вот тебе архив с заданием {message.text}:', attachment=doc, keyboard=admin_kb())
+                await message.answer(
+                    f'Вот тебе архив с заданием {message.text}:',
+                    attachment=doc,
+                    keyboard=admin_kb()
+                )
                 await state_dispenser.delete(message.from_id)
                 return
         except Exception as exception:
-            await message.answer(f'Ошибка!\n\n{exception}')
+            await message.answer(f'Ошибка на попытке №{i}:\n\n{exception}')
+            if i < MAX_RETRIES:
+                await asyncio.sleep(3)  # ← ждём перед следующей попыткой
 
-    await message.answer('Чето херня какая-то с архивом, попроси Рому ручками выгрузить', keyboard=admin_kb())
+    await message.answer(
+        'Не удалось отправить архив после 3 попыток. Попроси Рому ручками выгрузить 😅',
+        keyboard=admin_kb()
+    )
+    await state_dispenser.delete(message.from_id)
 
 
 @admin_labeler.private_message(text=['Топы'])
