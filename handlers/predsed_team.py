@@ -294,28 +294,53 @@ async def kick_ac(message: Message):
 
 @admin_labeler.private_message(state=BotStates.KICK_AC)
 async def get_kick_ac(message: Message):
-    people = message.text.split('\n')
+    people = [name.strip() for name in message.text.split('\n') if name.strip()]  # fix #1
+
     async with async_session as session:
-        for ac in people:
-            result = await session.execute(select(AlmostCurator).where(AlmostCurator.name == ac))
+        for name in people:
+            result = await session.execute(
+                select(AlmostCurator).where(AlmostCurator.name == name)
+            )
             ac_to_delete = result.scalars().first()
+
             if ac_to_delete:
-                await session.execute(delete(CompetitionActivity)
-                                      .where(CompetitionActivity.almost_curator_id == ac_to_delete.id))
-                await session.execute(delete(CompetitionInteractions)
-                                      .where(CompetitionInteractions.almost_curator_id == ac_to_delete.id))
-                await session.execute(delete(CompetitionRules)
-                                      .where(CompetitionRules.almost_curator_id == ac_to_delete.id))
-                await session.execute(delete(CompetitionAdditional)
-                                      .where(CompetitionAdditional.almost_curator_id == ac_to_delete.id))
-                await session.execute(delete(CompetitionResponsibility)
-                                      .where(CompetitionResponsibility.almost_curator_id == ac_to_delete.id))
-                await session.delete(ac_to_delete)
+                ac_id = ac_to_delete.id
+                full_name = ac_to_delete.full_name  # для поиска дедлайна дня рождения
+
+                # fix #2 — используем только один стиль удаления
+                await session.execute(
+                    delete(CompetitionActivity).where(CompetitionActivity.almost_curator_id == ac_id)
+                )
+                await session.execute(
+                    delete(CompetitionInteractions).where(CompetitionInteractions.almost_curator_id == ac_id)
+                )
+                await session.execute(
+                    delete(CompetitionRules).where(CompetitionRules.almost_curator_id == ac_id)
+                )
+                await session.execute(
+                    delete(CompetitionAdditional).where(CompetitionAdditional.almost_curator_id == ac_id)
+                )
+                await session.execute(
+                    delete(CompetitionResponsibility).where(CompetitionResponsibility.almost_curator_id == ac_id)
+                )
+                # fix #3 — удаляем дедлайн дня рождения
+                await session.execute(
+                    delete(Deadline).where(Deadline.name == f'День рождения {full_name}')
+                )
+                # удаляем самого куратора тем же стилем
+                await session.execute(
+                    delete(AlmostCurator).where(AlmostCurator.id == ac_id)
+                )
             else:
-                await message.answer(f'Почтикуратор с фамилией {ac} не найден')
+                await message.answer(f'Почтикуратор с фамилией {name} не найден')
+
         await session.commit()
-    await message.answer('Все готово!\n\n ❗ВАЖНО❗ \n\nНе забудь заблокировать этих людей в самой группе и удалить '
-                         'историю сообщений с ними', keyboard=admin_kb())
+
+    await message.answer(
+        'Все готово!\n\n❗ВАЖНО❗\n\nНе забудь заблокировать этих людей в самой группе и удалить '
+        'историю сообщений с ними',
+        keyboard=admin_kb()
+    )
     await state_dispenser.delete(message.from_id)
 
 
