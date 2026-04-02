@@ -5,6 +5,7 @@ from global_variables.token import api, GROUP_ID
 from orm.models import *
 from orm.database import delete, select, update, and_
 import random
+import time
 import asyncio
 
 
@@ -13,49 +14,75 @@ async def send_spam(text, pt=False, finish=False, more_deadlines=False):
         for vk_id in predsed_team_ids:
             await send_message(user_id=vk_id, text=text)
     else:
-        conversations = await api.messages.get_conversations(count=200)
+        # fix #1 — берём всех пользователей из БД, а не из conversations
+        async with async_session as session:
+            result = await session.execute(select(AlmostCurator.vk_id))
+            user_ids = result.scalars().all()
 
-        for i in range(conversations.count):
-            peer_type = conversations.items[i].conversation.peer.type.value
-            if peer_type == 'user':
-                user_id = conversations.items[i].conversation.peer.id
-                await send_message(user_id=user_id, text=text, finish=finish, more_deadlines=more_deadlines)
+        for user_id in user_ids:
+            await send_message(user_id=user_id, text=text, finish=finish, more_deadlines=more_deadlines)
+            await asyncio.sleep(0.05)  # небольшая пауза чтобы не словить rate limit VK
 
 
 async def send_message(user_id, text, finish=False, more_deadlines=False):
-    allow_message = await api.messages.is_messages_from_group_allowed(group_id=GROUP_ID, user_id=user_id)
-    if allow_message.is_allowed:
-        await api.messages.send(random_id=random.randint(1, 1000), peer_id=user_id, message=text)
+    try:
+        allow_message = await api.messages.is_messages_from_group_allowed(
+            group_id=GROUP_ID, user_id=user_id
+        )
+        if not allow_message.is_allowed:
+            return
+
+        # fix #2 — используем time.time_ns() чтобы random_id был уникальным
+        await api.messages.send(
+            random_id=time.time_ns() % 2147483647,
+            peer_id=user_id,
+            message=text
+        )
+
         if not finish:
             async with async_session as session:
-                await session.execute(update(AlmostCurator)
-                                      .where(AlmostCurator.vk_id == user_id)
-                                      .values(hw_completion=False))
+                await session.execute(
+                    update(AlmostCurator)
+                    .where(AlmostCurator.vk_id == user_id)
+                    .values(hw_completion=False)
+                )
                 await session.commit()
         else:
             if user_id not in predsed_team_ids:
                 async with async_session as session:
-                    result = await session.execute(select(AlmostCurator.strikes_number)
-                                                   .where(and_(AlmostCurator.hw_completion == False,
-                                                               AlmostCurator.vk_id == user_id)))  # noqa
+                    result = await session.execute(
+                        select(AlmostCurator.strikes_number)
+                        .where(and_(
+                            AlmostCurator.hw_completion == False,  # noqa
+                            AlmostCurator.vk_id == user_id
+                        ))
+                    )
                     strikes_num = result.scalars().first()
                     if strikes_num is not None:
-                        await session.execute(update(AlmostCurator)
-                                              .where(AlmostCurator.vk_id == user_id)
-                                              .values(strikes_number=strikes_num + 1))
-                        await api.messages.send(random_id=random.randint(1, 1000), peer_id=user_id,
-                                                message='Тебе выдано предупреждение!')
+                        await session.execute(
+                            update(AlmostCurator)
+                            .where(AlmostCurator.vk_id == user_id)
+                            .values(strikes_number=strikes_num + 1)
+                        )
+                        await api.messages.send(
+                            random_id=time.time_ns() % 2147483647,
+                            peer_id=user_id,
+                            message='Тебе выдано предупреждение!'
+                        )
                         await session.commit()
                         if not more_deadlines:
-                            await session.execute(update(AlmostCurator)
-                                                  .where(AlmostCurator.vk_id == user_id)
-                                                  .values(hw_completion=True))
+                            await session.execute(
+                                update(AlmostCurator)
+                                .where(AlmostCurator.vk_id == user_id)
+                                .values(hw_completion=True)
+                            )
                             await session.commit()
+    except Exception as e:
+        print(f'Ошибка отправки сообщения пользователю {user_id}: {e}')
 
 
 async def deadline_reminder(deadline_id, name, is_birthday, remain_time_sec, text=''):
     if is_birthday:
-        # Для дней рождения отправляем уведомление в сам день рождения
         msg = f'Сегодня {name} 🎉'
     else:
         msg = text
@@ -76,56 +103,65 @@ async def deadline_reminder(deadline_id, name, is_birthday, remain_time_sec, tex
 def add_deadline_to_schedule(id_deadline: int, deadline_end: datetime, is_birthday: bool, name: str, text=''):
     now = datetime.now()
     if is_birthday:
-        # Напоминание о дне рождения в сам день рождения в 00:00 по Мск (ежегодно)
         reminder = deadline_end.replace(hour=0, minute=0, second=0)
-
-        deadline_scheduler.add_job(func=deadline_reminder,
-                                   trigger=CronTrigger(month=reminder.month,
-                                                       day=reminder.day,
-                                                       hour=reminder.hour,
-                                                       minute=reminder.minute,
-                                                       second=reminder.second,
-                                                       timezone="Europe/Moscow"),
-                                   args=[id_deadline, name, is_birthday, 0, text])
+        deadline_scheduler.add_job(
+            func=deadline_reminder,
+            trigger=CronTrigger(
+                month=reminder.month,
+                day=reminder.day,
+                hour=reminder.hour,
+                minute=reminder.minute,
+                second=reminder.second,
+                timezone="Europe/Moscow"
+            ),
+            args=[id_deadline, name, is_birthday, 0, text]
+        )
     else:
-        remaining_time = (deadline_end - datetime.now()).total_seconds()
-
-        for i in [1, 0]:
-            remaining_seconds = round(remaining_time * i)
-
-            if i == 1:
-                reminder = now + timedelta(seconds=10)
-            else:
-                reminder = deadline_end - timedelta(seconds=remaining_seconds)
-
-            deadline_scheduler.add_job(func=deadline_reminder,
-                                       trigger=CronTrigger(year=reminder.year,
-                                                           month=reminder.month,
-                                                           day=reminder.day,
-                                                           hour=reminder.hour,
-                                                           minute=reminder.minute,
-                                                           second=reminder.second,
-                                                           timezone="Europe/Moscow"),
-                                       args=[id_deadline, name, is_birthday, remaining_seconds, text])
+        # Уведомление о новом дедлайне — через 10 секунд после создания
+        announcement_time = now + timedelta(seconds=10)
+        deadline_scheduler.add_job(
+            func=deadline_reminder,
+            trigger=CronTrigger(
+                year=announcement_time.year,
+                month=announcement_time.month,
+                day=announcement_time.day,
+                hour=announcement_time.hour,
+                minute=announcement_time.minute,
+                second=announcement_time.second,
+                timezone="Europe/Moscow"
+            ),
+            args=[id_deadline, name, is_birthday, 1, text]  # remain_time_sec=1 → отправит text
+        )
+        # Уведомление об окончании дедлайна — точно в момент дедлайна
+        deadline_scheduler.add_job(
+            func=deadline_reminder,
+            trigger=CronTrigger(
+                year=deadline_end.year,
+                month=deadline_end.month,
+                day=deadline_end.day,
+                hour=deadline_end.hour,
+                minute=deadline_end.minute,
+                second=deadline_end.second,
+                timezone="Europe/Moscow"
+            ),
+            args=[id_deadline, name, is_birthday, 0, text]  # remain_time_sec=0 → дедлайн истёк
+        )
 
 
 async def load_deadline():
-    now = (datetime.now().month, datetime.now().day,
-           datetime.now().hour, datetime.now().minute, datetime.now().second)
+    now = datetime.now()  # fix #3 — сравниваем datetime напрямую, а не кортежи
     async with async_session as session:
         deadlines = await session.execute(select(Deadline))
         deadlines = deadlines.scalars().all()
+
     for deadline in deadlines:
-        # Дедлайны-дни рождения не удаляем и всегда перезапускаем (они ежегодные)
         if deadline.birthday:
             add_deadline_to_schedule(deadline.id, deadline.time, deadline.birthday, deadline.name)
             continue
 
-        deadline_time = (deadline.time.month, deadline.time.day,
-                         deadline.time.hour, deadline.time.minute, deadline.time.second)
-        if deadline_time >= now:
+        if deadline.time >= now:  # дедлайн ещё не прошёл — планируем
             add_deadline_to_schedule(deadline.id, deadline.time, deadline.birthday, deadline.name)
-        else:
+        else:  # дедлайн уже прошёл — удаляем из БД
             async with async_session as session:
                 await session.execute(delete(Deadline).where(Deadline.id == deadline.id))
                 await session.commit()
