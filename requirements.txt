@@ -8,3 +8,4 @@ loguru
 aiofiles
 aiohttp
 aioshutil
+python-dotenv
