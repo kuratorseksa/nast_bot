@@ -441,6 +441,7 @@ async def accept_deadline(message: Message):
 
 @admin_labeler.private_message(text=['Выгрузить домашку'])
 async def get_hw(message: Message):
+    await asyncio.to_thread(os.makedirs, 'homework', exist_ok=True)  # ← создаём если нет
     file_names = await asyncio.to_thread(os.listdir, 'homework')
     if file_names:
         await message.answer('Выбери дедлайн из доступных:', keyboard=choose_deadline_kb(*file_names))
