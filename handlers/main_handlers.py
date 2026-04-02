@@ -233,6 +233,7 @@ async def get_calendar(message: Message):
 
 @main_labeler.private_message(text=['Сдать домашку'])
 async def pass_hw(message: Message):
+    await asyncio.to_thread(os.makedirs, 'homework', exist_ok=True)  # ← добавь эту строку
     async with async_session as session:
         deadlines = await session.execute(select(Deadline).where(Deadline.birthday == False))  # noqa
         deadlines = [deadline.name for deadline in deadlines.scalars().all()]
@@ -241,7 +242,6 @@ async def pass_hw(message: Message):
         await state_dispenser.set(message.from_id, BotStates.HW_GET_NAME)
     else:
         await message.answer('Текущих заданий нет!')
-
 
 @main_labeler.private_message(state=BotStates.HW_GET_NAME)
 async def get_homework_name(message: Message):
