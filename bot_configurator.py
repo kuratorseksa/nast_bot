@@ -2,14 +2,14 @@ from handlers.main_handlers import main_labeler
 from handlers.predsed_team import admin_labeler
 from handlers.deadlines import load_deadline
 from middlewares.main_middleware import NoBotMiddleware, AdminMiddleware
-from global_variables.variables import state_dispenser, labeler, deadline_scheduler
+from global_variables.variables import state_dispenser, deadline_scheduler
 from global_variables.token import api
 from loguru import logger
 from vkbottle import Bot
 from orm.database import create_tables
 import sys
 
-_initialized = False  # ← флаг
+_initialized = False
 
 
 def start_bot(loop):
@@ -29,17 +29,19 @@ def start_bot(loop):
         diagnose=True
     )
 
-    labeler.load(main_labeler)
-    labeler.load(admin_labeler)
-
-    labeler.message_view.register_middleware(NoBotMiddleware)
-    labeler.message_view.register_middleware(AdminMiddleware)
-
+    # Создаём бота — используем его встроенный labeler
     bot = Bot(
         api=api,
-        labeler=labeler,
         state_dispenser=state_dispenser
     )
+
+    # Подключаем хендлеры напрямую к боту
+    bot.labeler.load(main_labeler)
+    bot.labeler.load(admin_labeler)
+
+    # Подключаем middleware напрямую к боту
+    bot.labeler.message_view.register_middleware(NoBotMiddleware)
+    bot.labeler.message_view.register_middleware(AdminMiddleware)
 
     async def startup():
         try:
