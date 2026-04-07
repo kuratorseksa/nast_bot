@@ -3,11 +3,11 @@ from handlers.predsed_team import admin_labeler
 from handlers.deadlines import load_deadline
 from middlewares.main_middleware import NoBotMiddleware, AdminMiddleware
 from global_variables.variables import state_dispenser, deadline_scheduler
+from global_variables.logger import setup_logger
 from global_variables.token import api
-from loguru import logger
 from vkbottle import Bot
 from orm.database import create_tables
-import sys
+import os
 
 _initialized = False
 
@@ -16,32 +16,27 @@ def start_bot(loop):
     global _initialized
 
     if _initialized:
-        logger.warning("start_bot вызван повторно — игнорируем")
         return
     _initialized = True
 
-    logger.remove()
-    logger.add(
-        sink=sys.stderr,
-        format="{time:YYYY-MM-DD HH:mm:ss} {level} {message}",
-        backtrace=False,
-        level="ERROR",
-        diagnose=True
-    )
+    os.makedirs('logs', exist_ok=True)
+    os.makedirs('homework', exist_ok=True)
+    os.makedirs('homework_zips', exist_ok=True)
 
-    # Создаём бота — используем его встроенный labeler
-    bot = Bot(
-        api=api,
-        state_dispenser=state_dispenser
-    )
+    logger = setup_logger()
+    logger.info("Запуск бота...")
 
-    # Подключаем хендлеры напрямую к боту
+    bot = Bot(api=api, state_dispenser=state_dispenser)
+
     bot.labeler.load(main_labeler)
-    bot.labeler.load(admin_labeler)
+    logger.info("main_labeler загружен")
 
-    # Подключаем middleware напрямую к боту
+    bot.labeler.load(admin_labeler)
+    logger.info("admin_labeler загружен")
+
     bot.labeler.message_view.register_middleware(NoBotMiddleware)
     bot.labeler.message_view.register_middleware(AdminMiddleware)
+    logger.info("Middleware зарегистрированы")
 
     async def startup():
         try:
@@ -64,5 +59,5 @@ def start_bot(loop):
             raise
 
     loop.run_until_complete(startup())
-    print("Bot is started!")
+    logger.info("Бот запущен!")
     bot.run_forever()
