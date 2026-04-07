@@ -9,9 +9,17 @@ from vkbottle import Bot
 from orm.database import create_tables
 import sys
 
+_initialized = False  # ← флаг
+
 
 def start_bot(loop):
-    # Настройка логов
+    global _initialized
+
+    if _initialized:
+        logger.warning("start_bot вызван повторно — игнорируем")
+        return
+    _initialized = True
+
     logger.remove()
     logger.add(
         sink=sys.stderr,
@@ -21,18 +29,11 @@ def start_bot(loop):
         diagnose=True
     )
 
-    # Подключение лейблеров (с защитой от двойной загрузки)
-    if main_labeler not in labeler.custom_rules:
-        labeler.load(main_labeler)
-    if admin_labeler not in labeler.custom_rules:
-        labeler.load(admin_labeler)
+    labeler.load(main_labeler)
+    labeler.load(admin_labeler)
 
-    # Подключение middleware (с защитой от двойной регистрации)
-    existing_middlewares = [type(m) for m in labeler.message_view.middlewares]
-    if NoBotMiddleware not in existing_middlewares:
-        labeler.message_view.register_middleware(NoBotMiddleware)
-    if AdminMiddleware not in existing_middlewares:
-        labeler.message_view.register_middleware(AdminMiddleware)
+    labeler.message_view.register_middleware(NoBotMiddleware)
+    labeler.message_view.register_middleware(AdminMiddleware)
 
     bot = Bot(
         api=api,
@@ -47,14 +48,12 @@ def start_bot(loop):
         except Exception as e:
             logger.error(f"Ошибка при создании таблиц: {e}")
             raise
-
         try:
             await load_deadline()
             logger.info("Дедлайны загружены")
         except Exception as e:
             logger.error(f"Ошибка при загрузке дедлайнов: {e}")
             raise
-
         try:
             deadline_scheduler.start()
             logger.info("Планировщик запущен")
