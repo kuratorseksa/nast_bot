@@ -7,6 +7,22 @@ from orm.database import delete, select, update, and_
 import random
 import time
 import asyncio
+from loguru import logger
+
+async def send_message(user_id, text, finish=False, more_deadlines=False):
+    try:
+        ...
+        logger.info(f"Сообщение отправлено пользователю {user_id}")
+    except Exception as e:
+        logger.error(f"Ошибка отправки пользователю {user_id}: {e}")
+
+async def deadline_reminder(deadline_id, name, is_birthday, remain_time_sec, text=''):
+    logger.info(f"Срабатывание дедлайна: {name}, remain_time_sec={remain_time_sec}")
+    ...
+
+def add_deadline_to_schedule(id_deadline, deadline_end, is_birthday, name, text=''):
+    logger.info(f"Добавление дедлайна в расписание: {name}, время: {deadline_end}")
+    ...
 
 
 async def send_spam(text, pt=False, finish=False, more_deadlines=False):
