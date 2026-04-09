@@ -25,3 +25,6 @@ class BotStates(BaseStateGroup):
     HW_CHOOSE_ADM = 21
     TOP_GET_TAG = 22
     TOP_GET_ORDER_BY = 23
+    BELBIN_SET_PERSON = 24
+    BELBIN_SET_ROLE = 25
+    TEAM_SPLIT_GET_NUM = 26
