@@ -1,4 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, event
+from __future__ import annotations
+
+from typing import Optional
+
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, event, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from orm.database import Base, async_session
 from datetime import datetime
@@ -29,6 +33,7 @@ class AlmostCurator(Student):
     competition_interactions_rate: Mapped[float] = mapped_column(default=10)
     competition_rules_rate: Mapped[float] = mapped_column(default=10)
     competition_additional_rate: Mapped[float] = mapped_column(default=10)
+    belbin_role: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
 
     def __str__(self):
         return f'👤ФИО: [https://vk.com/id{self.vk_id}|{self.full_name}]\n' \
@@ -45,6 +50,7 @@ class AlmostCurator(Student):
                f'🎂День рождения: {self.birthday_date.strftime("%d.%m.%Y")}\n' \
                f'📱Тг: {self.inst_or_tg}\n' \
                f'📞 Номер телефона: {self.phone_number}\n\n' \
+               f'🧩Роль Белбина: {self.belbin_role or "—"}\n\n' \
                f'⚠️Количество страйков: {self.strikes_number}\n' \
                f'❗Количество пропусков: {self.meeting_attendance}\n' \
                f'Сделал дз: {"Да✔️" if self.hw_completion else "Нет❌"}\n\n' \
@@ -158,3 +164,25 @@ class Deadline(Base):
     def __str__(self):
         return f'Название: {self.name}\n\n' \
                f'Срок: {self.time}'
+
+
+class TeamSplit(Base):
+    __tablename__ = "TeamSplit"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    num_teams: Mapped[int]
+
+    members = relationship("TeamSplitMember", cascade="all,delete", back_populates="split")
+
+
+class TeamSplitMember(Base):
+    __tablename__ = "TeamSplitMember"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    split_id: Mapped[int] = mapped_column(ForeignKey("TeamSplit.id", ondelete="CASCADE"))
+    team_index: Mapped[int]
+    almost_curator_id: Mapped[int] = mapped_column(ForeignKey("AlmostCurator.id", ondelete="CASCADE"))
+
+    split = relationship("TeamSplit", back_populates="members")
+    ac = relationship(AlmostCurator)
