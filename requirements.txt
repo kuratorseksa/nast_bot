@@ -1,4 +1,4 @@
-vkbottle
+vkbottle==4.3.6
 envparse
 sqlalchemy
 asyncpg
@@ -8,4 +8,3 @@ loguru
 aiofiles
 aiohttp
 aioshutil
-python-dotenv
